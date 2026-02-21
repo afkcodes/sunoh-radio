@@ -80,11 +80,14 @@ async function syncProviderToDb(providerName: string, countryName?: string) {
           const upsertQuery = `
             INSERT INTO radio_stations (
               name, slug, image_url, stream_url, normalized_url, providers, countries, genres, languages, 
-              status, codec, bitrate, sample_rate, last_tested_at
+              status, codec, bitrate, sample_rate, last_tested_at, failure_count
             ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+              CASE WHEN $10 = 'working' THEN 0 ELSE 1 END
+            )
             ON CONFLICT (normalized_url) DO UPDATE SET
-              stream_url = EXCLUDED.stream_url, -- Update playable URL
+              stream_url = EXCLUDED.stream_url, -- Always update playable URL
               providers = radio_stations.providers || EXCLUDED.providers,
               countries = ARRAY(
                 SELECT DISTINCT e FROM UNNEST(radio_stations.countries || EXCLUDED.countries) AS e
@@ -97,9 +100,7 @@ async function syncProviderToDb(providerName: string, countryName?: string) {
               failure_count = CASE WHEN EXCLUDED.status = 'working' THEN 0 ELSE radio_stations.failure_count + 1 END,
               status = CASE 
                 WHEN radio_stations.is_verified = TRUE THEN radio_stations.status 
-                WHEN EXCLUDED.status = 'working' THEN 'working'
-                WHEN (radio_stations.failure_count + 1) >= 3 THEN 'broken'
-                ELSE radio_stations.status 
+                ELSE EXCLUDED.status 
               END,
               codec = CASE WHEN radio_stations.is_verified = TRUE THEN radio_stations.codec ELSE COALESCE(EXCLUDED.codec, radio_stations.codec) END,
               last_tested_at = EXCLUDED.last_tested_at,
