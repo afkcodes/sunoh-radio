@@ -1,5 +1,5 @@
 # Composite Dockerfile for Sunoh Radio Scraper & API
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 # Install system dependencies: Python, FFmpeg, and build tools
 RUN apt-get update && apt-get install -y \
