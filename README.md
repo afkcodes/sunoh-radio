@@ -1,72 +1,61 @@
-# Sunoh Radio Scrapers
+# Sunoh Radio: The Global Radio Open Directory 🌍📻
 
-A professional, high-scale radio station scraping and ingestion pipeline designed for the Sunoh project but fully standalone and open-source.
+Sunoh Radio Scrapers is an ambitious, community-driven project dedicated to building the world's most comprehensive and accurate open-source directory of global radio stations. 
 
-## Features
-- **Global Reach**: Supports 230+ countries/territories.
-- **VPN Automation**: Seamless integration with **Proton VPN** CLI to bypass regional geo-blocking.
-- **Smart Deduplication**: URL normalization engine ensures unique stations across multiple providers.
-- **High Performance**: 
-    - Parallel stream validation using **FFprobe**.
-    - Batch database ingestion (upserts) for speed and data integrity.
-- **Resilience**: "Death Timer" logic protects verified stations from transient network errors.
-- **Premium Search Support**: Optimized for PostgreSQL **GIN** and **Trigram** indexing for lighting-fast fuzzy search.
+What started as a component for the Sunoh App is now a powerful, standalone service designed to scale, bypass geo-restrictions, and provide developers with a production-ready API for internet radio.
 
-## Prerequisites
-- **Node.js** (v18+)
-- **Python 3**
-- **FFmpeg** (specifically `ffprobe`)
-- **PostgreSQL**
-- **Proton VPN CLI** (Optional, for geo-blocked streams)
+## ✨ Our Vision
+We believe that internet radio should be accessible to everyone, everywhere. Our mission is to solve the three biggest problems in digital radio:
+1.  **Geo-Blocking**: Using automated VPN switching (Proton VPN) to validate streams from any country.
+2.  **Data Fragmentation**: Using a sophisticated URL-Normalization engine to merge station data from multiple providers into a single source of truth.
+3.  **Link Rot**: A resilient "Death Timer" validation system that differentiates between temporary outages and permanently broken streams.
 
-## Installation
+## 🚀 Key Features
+- **🌍 Global by Design**: Metadata and validation logic for over 230 countries and territories.
+- **🛡️ Secure Geo-Unblocking**: Fully automated integration with **Proton VPN** for authentic local validation.
+- **⚡ High-Performance Architecture**: 
+    - Parallel validation using **FFprobe** for technical codec/bitrate audit.
+    - Optimized PostgreSQL backend with **GIN** & **Trigram** indexing for instant fuzzy search.
+- **🐳 Scalable Docker Stack**: Ready for cloud deployment with Node 22, Postgres 17, and Python 3.
+- **🔌 API-First**: Comes with a built-in Fastify server to serve radio data to your frontend or mobile app instantly.
+- **🤝 Open Source**: Licensed under MIT, built for the community.
 
-### Local Setup
-1. Clone the repository.
-2. Install Node dependencies: `npm install`
-3. Update `.env` and run `npm run init-db`.
+## 🛠️ Tech Stack
+- **Engine**: Node.js 22 (LTS), Python 3.12
+- **Validation**: FFmpeg/FFprobe
+- **Database**: PostgreSQL 17
+- **API**: Fastify
+- **Containerization**: Docker & Docker Compose
 
-### Docker Setup (Scalable)
-1. Build and start the infrastructure:
-   ```bash
-   npm run docker:up
-   ```
-2. Initialize the database inside the container:
-   ```bash
-   npm run docker:worker npm run init-db
-   ```
+## 📦 Installation
 
-## Usage
+### The Quick Start (Docker)
+The recommended way to run Sunoh Radio is using Docker, which sets up the database, the API, and the worker environment in one go.
 
-### Using Docker (Recommended for scaling)
-To run a specific country validation via the Docker worker:
-```bash
-npm run docker:worker python3 scripts/ingest.py --provider onlineradiobox --iso US
-```
+1.  **Build & Launch**:
+    ```bash
+    cp .env.example .env
+    npm run docker:up
+    ```
+2.  **Initialize Schema**:
+    ```bash
+    npm run docker:worker npm run init-db
+    ```
 
-### The Automated Flow (Native Host)
-Useful if running Proton VPN on the host machine:
-```bash
-protonvpn signin
-python3 scripts/validate_all.py --provider onlineradiobox
-```
+### The Professional Workflow (Automated VPN)
+To run the full global ingestion with automatic VPN country switching (requires Proton VPN installed on host):
+1.  **Login**: `protonvpn signin`
+2.  **Launch**: `python3 scripts/validate_all.py --provider onlineradiobox`
 
-### Manual Ingestion
-1. **Ingest & Validate**:
-   ```bash
-   python3 scripts/ingest.py --provider onlineradiobox --iso US
-   ```
-2. **Sync to Database**:
-   ```bash
-   npm run sync onlineradiobox "United States"
-   ```
+## 📂 Project Anatomy
+- `scripts/`: The "Brain" - Python orchestration and stream validation.
+- `src/`: The "Engine" - TypeScript API and high-speed database sync.
+- `providers/`: Raw scraped data organized by provider.
+- `metadata/`: The "Clean Cache" - Validated, deduplicated production output.
+- `core/`: Global standards - ISO maps and country definitions.
 
-## Project Structure
-- `scripts/`: Python orchestration and validation scripts.
-- `src/`: TypeScript database logic and sync engines.
-- `core/`: ISO maps and country definitions.
-- `providers/`: Raw scraped JSON data organized by provider.
-- `metadata/`: Cleaned and validated station data.
+## 🤝 Contributing
+We woud love help expanding our providers list and refining metadata! If you're interested in building the future of open radio, please open an issue or submit a PR.
 
-## License
-MIT
+## 📜 License
+MIT - Created and maintained by Ashish Kumar.
