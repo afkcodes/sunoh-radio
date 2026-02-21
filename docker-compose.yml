@@ -25,7 +25,7 @@ services:
       db:
         condition: service_healthy
     env_file: .env
-    # network_mode: host # Uncomment if you want to use host VPN (Proton)
+    network_mode: host # Uncomment if you want to use host VPN (Proton)
     volumes:
       - ./providers:/app/providers
       - ./metadata:/app/metadata
