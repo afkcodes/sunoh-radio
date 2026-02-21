@@ -5,6 +5,7 @@ import subprocess
 import time
 import argparse
 import sys
+from datetime import datetime
 
 # Configuration
 os.environ["PATH"] = f"/home/ashish/n/bin:{os.environ.get('PATH', '')}"
@@ -17,14 +18,23 @@ if os.path.exists(env_path):
         for line in f:
             line = line.strip()
             if line and not line.startswith("#"):
-                key, value = line.split("=", 1)
-                os.environ[key.strip()] = value.strip()
+                try:
+                    key, value = line.split("=", 1)
+                    os.environ[key.strip()] = value.strip()
+                except ValueError:
+                    continue
 
 METADATA_DIR = os.path.join(SCRAPER_ROOT, "metadata")
 CORE_DIR = os.path.join(SCRAPER_ROOT, "core")
+LOGS_DIR = os.path.join(SCRAPER_ROOT, "logs")
 STATE_FILE = os.path.join(METADATA_DIR, "ingestion_progress.json")
 COUNTRIES_FILE = os.path.join(CORE_DIR, "countries.txt")
 ISO_MAP_FILE = os.path.join(CORE_DIR, "countries_iso_map.json")
+LOG_FILE = os.path.join(LOGS_DIR, "ingestion.log")
+
+# Ensure directories exist
+os.makedirs(METADATA_DIR, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 # Colors for output
 GREEN = "\033[92m"
@@ -33,8 +43,14 @@ YELLOW = "\033[93m"
 CYAN = "\033[96m"
 RESET = "\033[0m"
 
-def log(msg, color=RESET):
-    print(f"{color}{msg}{RESET}")
+def log(msg, color=RESET, log_to_file=True):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_msg = f"[{timestamp}] {msg}"
+    print(f"{color}{formatted_msg}{RESET}")
+    
+    if log_to_file:
+        with open(LOG_FILE, "a") as f:
+            f.write(formatted_msg + "\n")
 
 def run_command(cmd, timeout=None):
     """Run a shell command and return stdout, stderr, and return code."""
@@ -93,7 +109,6 @@ def save_progress(country_name, status):
         "status": status,
         "last_run": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
-    os.makedirs(METADATA_DIR, exist_ok=True)
     with open(STATE_FILE, 'w') as f:
         json.dump(progress, f, indent=2)
 
@@ -101,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser(description="Orchestrate radio ingestion with automatic Proton VPN switching.")
     parser.add_argument("--provider", required=True, help="Radio provider name (e.g., onlineradiobox)")
     parser.add_argument("--force", action="store_true", help="Reprocess already processed countries")
-    parser.add_argument("--resume", action="store_true", default=True, help="Resume from last processed country")
+    parser.add_argument("--disconnect-after", action="store_true", default=True, help="Disconnect VPN after each country (safer for SSH)")
     
     args = parser.parse_args()
     provider = args.provider
@@ -123,66 +138,75 @@ def main():
         lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
     log(f"Starting orchestration for {len(lines)} countries...", GREEN)
+    log(f"Log file: {LOG_FILE}", CYAN)
 
-    for line in lines:
-        try:
-            iso_code, country_name = line.split(":", 1)
-        except ValueError:
-            continue
+    try:
+        for line in lines:
+            try:
+                iso_code, country_name = line.split(":", 1)
+            except ValueError:
+                continue
 
-        if not args.force and country_name in processed and processed[country_name]["status"] == "success":
-            log(f"Skipping {country_name} (Already processed)", YELLOW)
-            continue
+            if not args.force and country_name in processed and processed[country_name]["status"] == "success":
+                log(f"Skipping {country_name} (Already processed)", YELLOW)
+                continue
 
-        log(f"\n>>> Processing Country: {country_name} ({iso_code})", CYAN)
+            log(f"\n>>> Processing Country: {country_name} ({iso_code})", CYAN)
 
-        # 1. Connect VPN
-        vpn_success = False
-        retries = 3
-        while retries > 0 and not vpn_success:
-            if vpn_connect(iso_code):
-                vpn_success = True
-            else:
-                retries -= 1
-                log(f"VPN connection failed. Retries left: {retries}", YELLOW)
-                vpn_disconnect()
-                time.sleep(5)
+            # 1. Connect VPN
+            vpn_success = False
+            retries = 3
+            while retries > 0 and not vpn_success:
+                if vpn_connect(iso_code):
+                    vpn_success = True
+                else:
+                    retries -= 1
+                    log(f"VPN connection failed. Retries left: {retries}", YELLOW)
+                    vpn_disconnect()
+                    time.sleep(5)
 
-        if not vpn_success:
-            log(f"Skipping {country_name} due to VPN failure.", RED)
-            save_progress(country_name, "failed_vpn")
-            continue
+            if not vpn_success:
+                log(f"Skipping {country_name} due to VPN failure.", RED)
+                save_progress(country_name, "failed_vpn")
+                continue
 
-        # 2. Run Ingestion
-        log(f"Running ingestion for {country_name}...", CYAN)
-        # ingest.py is in the same directory as this script
-        ingest_cmd = f"python3 {SCRAPER_ROOT}/scripts/ingest.py --provider {provider} --country \"{country_name}\" --iso {iso_code}"
-        stdout, stderr, code = run_command(ingest_cmd)
+            # 2. Run Ingestion
+            try:
+                log(f"Running ingestion for {country_name}...", CYAN)
+                ingest_cmd = f"python3 {SCRAPER_ROOT}/scripts/ingest.py --provider {provider} --country \"{country_name}\" --iso {iso_code}"
+                stdout, stderr, code = run_command(ingest_cmd)
 
-        if code == 0:
-            log(f"Successfully ingested {country_name}", GREEN)
-            
-            # 3. Sync to DB (Optional but recommended for reliability)
-            log(f"Syncing {country_name} to database...", CYAN)
-            sync_cmd = f"npx tsx {SCRAPER_ROOT}/src/sync_to_db.ts {provider} \"{country_name}\""
-            s_stdout, s_stderr, s_code = run_command(sync_cmd)
-            
-            if s_code == 0:
-                log(f"Successfully synced {country_name} to DB", GREEN)
-                save_progress(country_name, "success")
-            else:
-                log(f"Ingested but sync failed for {country_name}: {s_stderr}", YELLOW)
-                save_progress(country_name, "failed_sync")
-        else:
-            log(f"Ingestion failed for {country_name}: {stderr}", RED)
-            save_progress(country_name, "failed_ingest")
+                if code == 0:
+                    log(f"Successfully ingested {country_name}", GREEN)
+                    
+                    # 3. Sync to DB
+                    log(f"Syncing {country_name} to database...", CYAN)
+                    sync_cmd = f"npx tsx {SCRAPER_ROOT}/src/sync_to_db.ts {provider} \"{country_name}\""
+                    s_stdout, s_stderr, s_code = run_command(sync_cmd)
+                    
+                    if s_code == 0:
+                        log(f"Successfully synced {country_name} to DB", GREEN)
+                        save_progress(country_name, "success")
+                    else:
+                        log(f"Ingested but sync failed for {country_name}: {s_stderr}", YELLOW)
+                        save_progress(country_name, "failed_sync")
+                else:
+                    log(f"Ingestion failed for {country_name}: {stderr}", RED)
+                    save_progress(country_name, "failed_ingest")
+            except Exception as e:
+                log(f"Unexpected error processing {country_name}: {str(e)}", RED)
+                save_progress(country_name, "error")
+            finally:
+                if args.disconnect_after:
+                    vpn_disconnect()
 
-        # 4. Disconnect VPN (Optional: can keep it if next country is same, but safer to cycle)
-        # However, Proton VPN switching usually handles this.
-        # vpn_disconnect() 
-
-    log("\nOrchestration Complete!", GREEN)
-    vpn_disconnect()
+    except KeyboardInterrupt:
+        log("\nProcess interrupted by user.", YELLOW)
+    except Exception as e:
+        log(f"\nCRITICAL ERROR: {str(e)}", RED)
+    finally:
+        log("\nOrchestration Finished / Cleaning up...", GREEN)
+        vpn_disconnect()
 
 if __name__ == "__main__":
     main()
