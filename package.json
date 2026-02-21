@@ -9,10 +9,14 @@
     "init-db": "tsx src/initDb.ts",
     "sync": "tsx src/sync_to_db.ts",
     "ingest": "python3 scripts/ingest.py",
-    "validate": "python3 scripts/validate_all.py"
+    "validate": "python3 scripts/validate_all.py",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:worker": "docker compose run --rm scraper"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
+    "fastify": "^5.7.4",
     "pg": "^8.18.0",
     "puppeteer": "^24.36.1",
     "puppeteer-extra": "^3.3.6",

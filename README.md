@@ -21,22 +21,31 @@ A professional, high-scale radio station scraping and ingestion pipeline designe
 
 ## Installation
 
+### Local Setup
 1. Clone the repository.
-2. Install Node dependencies:
+2. Install Node dependencies: `npm install`
+3. Update `.env` and run `npm run init-db`.
+
+### Docker Setup (Scalable)
+1. Build and start the infrastructure:
    ```bash
-   npm install
+   npm run docker:up
    ```
-3. Initialize the database schema:
+2. Initialize the database inside the container:
    ```bash
-   cp .env.example .env
-   # Update .env with your DB credentials
-   npm run init-db
+   npm run docker:worker npm run init-db
    ```
 
 ## Usage
 
-### The Automated Flow (Recommended)
-This script handles VPN switching, country-by-country ingestion, and database syncing automatically.
+### Using Docker (Recommended for scaling)
+To run a specific country validation via the Docker worker:
+```bash
+npm run docker:worker python3 scripts/ingest.py --provider onlineradiobox --iso US
+```
+
+### The Automated Flow (Native Host)
+Useful if running Proton VPN on the host machine:
 ```bash
 protonvpn signin
 python3 scripts/validate_all.py --provider onlineradiobox

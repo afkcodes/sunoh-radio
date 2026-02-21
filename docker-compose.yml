@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sunoh-radio-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-sunoh}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sunoh_pass}
+      POSTGRES_DB: ${DB_NAME:-sunoh_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sunoh} -d ${DB_NAME:-sunoh_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # The Ingestion Worker
+  scraper:
+    build: .
+    container_name: sunoh-radio-worker
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    # network_mode: host # Uncomment if you want to use host VPN (Proton)
+    volumes:
+      - ./providers:/app/providers
+      - ./metadata:/app/metadata
+      - ./core:/app/core
+    # By default, this doesn't do anything. You run it with:
+    # docker compose run scraper python3 scripts/validate_all.py --provider onlineradiobox
+    command: ["sleep", "infinity"]
+
+  # The Future API (Placeholder)
+  api:
+    build: .
+    container_name: sunoh-radio-api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "3000:3000"
+    command: ["node", "dist/index.js"] # Adjust once API is built
+
+volumes:
+  postgres_data:
