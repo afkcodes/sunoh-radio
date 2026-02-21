@@ -117,6 +117,7 @@ def main():
     parser.add_argument("--provider", required=True, help="Radio provider name (e.g., onlineradiobox)")
     parser.add_argument("--force", action="store_true", help="Reprocess already processed countries")
     parser.add_argument("--disconnect-after", action="store_true", default=True, help="Disconnect VPN after each country (safer for SSH)")
+    parser.add_argument("--skip-vpn", action="store_true", help="Skip VPN management (useful if using a manual wg-quick tunnel)")
     
     args = parser.parse_args()
     provider = args.provider
@@ -154,16 +155,18 @@ def main():
             log(f"\n>>> Processing Country: {country_name} ({iso_code})", CYAN)
 
             # 1. Connect VPN
-            vpn_success = False
-            retries = 3
-            while retries > 0 and not vpn_success:
-                if vpn_connect(iso_code):
-                    vpn_success = True
-                else:
-                    retries -= 1
-                    log(f"VPN connection failed. Retries left: {retries}", YELLOW)
-                    vpn_disconnect()
-                    time.sleep(5)
+            vpn_success = True
+            if not args.skip_vpn:
+                vpn_success = False
+                retries = 3
+                while retries > 0 and not vpn_success:
+                    if vpn_connect(iso_code):
+                        vpn_success = True
+                    else:
+                        retries -= 1
+                        log(f"VPN connection failed. Retries left: {retries}", YELLOW)
+                        vpn_disconnect()
+                        time.sleep(5)
 
             if not vpn_success:
                 log(f"Skipping {country_name} due to VPN failure.", RED)
@@ -197,7 +200,7 @@ def main():
                 log(f"Unexpected error processing {country_name}: {str(e)}", RED)
                 save_progress(country_name, "error")
             finally:
-                if args.disconnect_after:
+                if not args.skip_vpn and args.disconnect_after:
                     vpn_disconnect()
 
     except KeyboardInterrupt:
@@ -206,7 +209,8 @@ def main():
         log(f"\nCRITICAL ERROR: {str(e)}", RED)
     finally:
         log("\nOrchestration Finished / Cleaning up...", GREEN)
-        vpn_disconnect()
+        if not args.skip_vpn:
+            vpn_disconnect()
 
 if __name__ == "__main__":
     main()
