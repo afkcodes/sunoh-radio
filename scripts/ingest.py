@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 
 # Configuration
-MAX_WORKERS = 5  # Number of parallel ffprobe checks
-PROBE_TIMEOUT = 15  # Seconds to wait for each stream
+MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 5))
+PROBE_TIMEOUT = int(os.environ.get("PROBE_TIMEOUT", 15))
 OUTPUT_DIR = "metadata"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 REFERER = "https://onlineradiobox.com/"

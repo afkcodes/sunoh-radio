@@ -9,6 +9,17 @@ import sys
 # Configuration
 os.environ["PATH"] = f"/home/ashish/n/bin:{os.environ.get('PATH', '')}"
 SCRAPER_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Load .env file manually to avoid dependency issues on host
+env_path = os.path.join(SCRAPER_ROOT, ".env")
+if os.path.exists(env_path):
+    with open(env_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                os.environ[key.strip()] = value.strip()
+
 METADATA_DIR = os.path.join(SCRAPER_ROOT, "metadata")
 CORE_DIR = os.path.join(SCRAPER_ROOT, "core")
 STATE_FILE = os.path.join(METADATA_DIR, "ingestion_progress.json")
