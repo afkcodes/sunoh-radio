@@ -48,25 +48,122 @@ To run the full global ingestion with automatic VPN country switching (requires 
 2.  **Launch**: `python3 scripts/validate_all.py --provider onlineradiobox`
 
 ## 🌐 API Reference
-Start the API (`npm run dev` for watch mode, or `npm start` against a build). All
-responses are JSON and send `Cache-Control` headers so a CDN can absorb read traffic.
 
+Start the API with `npm run dev` (watch mode) or `npm start` (against a build). It
+listens on `PORT` (default **4000**). All responses are JSON with `Cache-Control`
+headers so a CDN can absorb read traffic. Base URL in examples: `http://localhost:4000`.
+
+Built-in middleware: JSON-schema validation (→ `400` on bad input), rate limiting
+(`X-RateLimit-*` headers), CORS allow-list, security headers (helmet), in-memory
+caching, and graceful shutdown. Tuning knobs are in `.env.example`.
+
+### Endpoints at a glance
 | Method & Path | Description |
 | :--- | :--- |
 | `GET /health` | Liveness probe. |
-| `GET /ready` | Readiness probe (checks the database). |
-| `GET /stations` | Paginated list. Query: `country`, `genre`, `language`, `status` (default `working`), `q` (search), `limit` (≤100), `offset`. Returns `{ data, pagination }`. `q` matches the **name or any genre tag** and is **relevance-ranked** (closest name matches first via `pg_trgm`). |
-| `GET /stations/:slug` | Single station by slug (404 if missing). |
+| `GET /ready` | Readiness probe (verifies the DB; `503` if unreachable). |
+| `GET /stations` | Paginated, filterable, searchable list of stations. |
+| `GET /stations/:slug` | A single station by its slug (`404` if missing). |
+| `GET /countries` | Country facet counts (working stations), cached. |
+| `GET /genres` | Genre facet counts (working stations), cached. |
+| `GET /languages` | Language facet counts (working stations), cached. |
+| `GET /stats` | Totals by status + distinct country/genre counts, cached. |
 
-Each station includes a resolved `image` field (`COALESCE(image_hosted, image_url)`) — use it
-directly; it prefers the Cloudinary-hosted logo and falls back to the original source URL.
-| `GET /countries` · `GET /genres` · `GET /languages` | Facet counts over working stations (cached). |
-| `GET /stats` | Totals by status plus distinct country/genre counts (cached). |
+### The station object
+Every station returned by `/stations` and `/stations/:slug` has this shape. Use the
+resolved **`image`** field directly — it is `COALESCE(image_hosted, image_url)` (prefers
+the Cloudinary-hosted logo, falls back to the original source).
 
-Built-in middleware: JSON-schema validation (400 on bad input), rate limiting,
-CORS allow-list, security headers (helmet), in-memory caching, and graceful
-shutdown. See `.env.example` for all tuning knobs. At multi-replica scale, move
-the cache + rate-limit store to Redis and front Postgres with PgBouncer.
+```json
+{
+  "id": 61913,
+  "slug": "1-country-99-645066fcef",
+  "name": "#1 Country 99",
+  "image_url": "https://cdn.onlineradiobox.com/img/l/8/40128.v4.png",
+  "image_hosted": "https://res.cloudinary.com/<cloud>/.../radio-stations/1-country-99-645066fcef.png",
+  "image": "https://res.cloudinary.com/<cloud>/.../radio-stations/1-country-99-645066fcef.png",
+  "stream_url": "https://playerservices.streamtheworld.com/.../WDENFMAAC.aac",
+  "countries": ["US"],
+  "genres": ["country"],
+  "languages": [],
+  "status": "working",
+  "codec": "aac",
+  "bitrate": 49509,
+  "sample_rate": 44100
+}
+```
+
+### `GET /stations`
+Paginated list. Returns `{ data: Station[], pagination: { limit, offset, total } }`.
+
+| Query param | Type | Default | Notes |
+| :--- | :--- | :--- | :--- |
+| `country` | string (ISO-2) | — | exact match against `countries[]`, e.g. `US` |
+| `genre` | string | — | exact match against `genres[]`, e.g. `jazz` |
+| `language` | string | — | exact match against `languages[]` |
+| `status` | enum | `working` | `working` \| `broken` \| `untested` |
+| `q` | string | — | **search** — matches name **or any genre tag**, relevance-ranked (closest name matches first via `pg_trgm`) |
+| `limit` | int 1–100 | `50` | values > 100 → `400` |
+| `offset` | int ≥ 0 | `0` | |
+
+```bash
+# page of working US jazz stations
+curl -s "http://localhost:4000/stations?country=US&genre=jazz&limit=20"
+
+# relevance-ranked search (name + genre), page 2
+curl -s "http://localhost:4000/stations?q=jazz&limit=20&offset=20"
+```
+```json
+{
+  "data": [ { "id": 61913, "slug": "1-country-99-645066fcef", "name": "#1 Country 99", "...": "..." } ],
+  "pagination": { "limit": 20, "offset": 0, "total": 47939 }
+}
+```
+
+### `GET /stations/:slug`
+```bash
+curl -s "http://localhost:4000/stations/1-country-99-645066fcef"
+```
+Returns a single station object, or `404 { "error": "Station not found" }`.
+
+### `GET /countries` · `GET /genres` · `GET /languages`
+Facet counts over **working** stations, sorted by count desc (cached ~10 min).
+```bash
+curl -s "http://localhost:4000/countries"
+```
+```json
+[ { "value": "US", "count": 7473 }, { "value": "BR", "count": 6812 }, { "value": "DE", "count": 2987 } ]
+```
+
+### `GET /stats`
+```bash
+curl -s "http://localhost:4000/stats"
+```
+```json
+{
+  "total": 66530,
+  "by_status": { "broken": 18591, "working": 47939 },
+  "working": 47939,
+  "countries": 229,
+  "genres": 247
+}
+```
+
+### `GET /health` · `GET /ready`
+```bash
+curl -s "http://localhost:4000/health"   # { "status": "ok", "service": "sunoh-radio-api" }
+curl -s "http://localhost:4000/ready"    # { "status": "ready" }  (503 if the DB is down)
+```
+
+### Errors
+Validation failures return `400` with Fastify's error shape:
+```json
+{ "statusCode": 400, "code": "FST_ERR_VALIDATION", "error": "Bad Request", "message": "querystring/limit must be <= 100" }
+```
+
+> At multi-replica scale, move the cache + rate-limit store to Redis and front
+> Postgres with PgBouncer; put a CDN in front of the API (the `Cache-Control`
+> headers make `/countries`, `/genres`, `/stats` essentially free at the edge).
 
 ## 🗄️ Database Migrations
 Schema lives in `migrations/*.sql` and is applied by a small forward-only runner:

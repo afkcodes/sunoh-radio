@@ -1,0 +1,51 @@
+# Production stack for a VPS: Postgres + the API (auto-migrating, slim image).
+# The API is published on 127.0.0.1 only — add a reverse proxy later for TLS.
+#
+#   ./deploy.sh                      # recommended
+#   docker compose -f docker-compose.prod.yml up -d --build   # manual
+#
+# Requires a .env with at least DB_PASSWORD set (and CLOUDINARY_* for images).
+
+name: sunoh-radio-scrapers # pinned so the data volume stays sunoh-radio-scrapers_postgres_data
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: sunoh-radio-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-sunoh}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      POSTGRES_DB: ${DB_NAME:-sunoh_radio_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No published port: reachable only on the internal compose network.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-sunoh} -d ${DB_NAME:-sunoh_radio_db}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: sunoh-radio-api
+    container_name: sunoh-radio-api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      # Talk to the db service over the compose network (not the host's :5433).
+      DB_HOST: db
+      DB_PORT: 5432
+    ports:
+      # localhost only — front with a reverse proxy when you go public.
+      - '127.0.0.1:4000:4000'
+
+volumes:
+  postgres_data:
