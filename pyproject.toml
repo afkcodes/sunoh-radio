@@ -1,0 +1,14 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["providers", "metadata", "node_modules"]
+
+[tool.ruff.lint]
+# High-value rules: real bugs (pyflakes F, syntax E9), import order (I),
+# whitespace (W), and safe modernizations (UP). The broad E7-style checks
+# (one-line `if`, bare `except`) are intentionally left off — the existing
+# pipeline scripts use that terse idiom deliberately.
+select = ["F", "I", "W", "E9", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["scripts/tests"]

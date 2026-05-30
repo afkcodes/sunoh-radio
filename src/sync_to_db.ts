@@ -1,33 +1,13 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { query } from './db';
-
-/**
- * Normalizes a URL by removing session/token parameters.
- */
-function normalizeUrl(url: string): string {
-  if (!url) return '';
-  try {
-    const urlObj = new URL(url.trim());
-    const stripParams = [
-      'token', 'session_id', 'sid', 'uid', 'uuid', 'auth', 'expires',
-      'timestamp', 'time', 'key', 'hash', 'signature', 'sign',
-      'tracker', 'client_id', 'user_id', 'h', 't', 'session', 'player'
-    ];
-
-    stripParams.forEach(param => urlObj.searchParams.delete(param));
-    urlObj.searchParams.sort();
-
-    return urlObj.toString().replace(/\/$/, '');
-  } catch (e) {
-    return url.trim();
-  }
-}
+import { closePool, query } from './db';
+import { normalizeUrl } from './lib/normalizeUrl';
 
 /**
  * Creates a URL-friendly slug from a string.
  */
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .toString()
     .toLowerCase()
@@ -35,6 +15,20 @@ function slugify(text: string): string {
     .replace(/\s+/g, '-')     // Replace spaces with -
     .replace(/[^\w-]+/g, '')  // Remove all non-word chars
     .replace(/--+/g, '-');    // Replace multiple - with single -
+}
+
+/**
+ * Deterministic, stable slug: `slugify(name)-<6 hex of sha1(normalized_url)>`.
+ * Because the suffix derives from the unique dedup anchor, re-syncing the same
+ * station always yields the identical slug (no random churn) while different
+ * stations that share a name stay distinct.
+ */
+export function makeSlug(name: string, normalizedUrl: string): string {
+  const base = slugify(name) || 'station';
+  // 10 hex chars (40 bits) keeps collisions negligible across 10^5+ rows while
+  // staying readable. Derived from the unique anchor, so it is stable.
+  const suffix = crypto.createHash('sha1').update(normalizedUrl).digest('hex').slice(0, 10);
+  return `${base}-${suffix}`;
 }
 
 /**
@@ -74,8 +68,10 @@ async function syncProviderToDb(providerName: string, countryName?: string) {
     const results = await Promise.all(
       batch.map(async (station: any) => {
         try {
-          const normalizedUrl = normalizeUrl(station.stream_url);
-          const slug = `${slugify(station.name)}-${Math.random().toString(36).substring(2, 7)}`;
+          // Trust the canonical `normalized_url` produced by the Python
+          // pipeline; only recompute as a fallback for older files that lack it.
+          const normalizedUrl = station.normalized_url || normalizeUrl(station.stream_url);
+          const slug = makeSlug(station.name, normalizedUrl);
 
           const upsertQuery = `
             INSERT INTO radio_stations (
@@ -83,11 +79,11 @@ async function syncProviderToDb(providerName: string, countryName?: string) {
               status, codec, bitrate, sample_rate, last_tested_at, failure_count
             ) 
             VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-              CASE WHEN $10 = 'working' THEN 0 ELSE 1 END
+              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::varchar, $11, $12, $13, $14,
+              CASE WHEN $10::varchar = 'working' THEN 0 ELSE 1 END
             )
             ON CONFLICT (normalized_url) DO UPDATE SET
-              stream_url = EXCLUDED.stream_url, -- Always update playable URL
+              stream_url = EXCLUDED.stream_url,
               providers = radio_stations.providers || EXCLUDED.providers,
               countries = ARRAY(
                 SELECT DISTINCT e FROM UNNEST(radio_stations.countries || EXCLUDED.countries) AS e
@@ -105,7 +101,7 @@ async function syncProviderToDb(providerName: string, countryName?: string) {
               codec = CASE WHEN radio_stations.is_verified = TRUE THEN radio_stations.codec ELSE COALESCE(EXCLUDED.codec, radio_stations.codec) END,
               last_tested_at = EXCLUDED.last_tested_at,
               updated_at = CURRENT_TIMESTAMP
-            RETURNING (xmin = 0) as is_new;
+            RETURNING (xmax = 0) as is_new;
           `;
 
           const providersJson = JSON.stringify({ [providerName]: station.id });
@@ -172,9 +168,10 @@ if (require.main === module) {
   }
 
   syncProviderToDb(provider, country)
+    .then(() => closePool())
     .then(() => process.exit(0))
     .catch((err) => {
       console.error(err);
-      process.exit(1);
+      closePool().finally(() => process.exit(1));
     });
 }

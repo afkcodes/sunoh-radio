@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-import subprocess
-import json
 import argparse
-import sys
+import json
+import subprocess
 from datetime import datetime
 
 # Configuration
@@ -22,9 +21,9 @@ def validate_stream(url, timeout=DEFAULT_TIMEOUT):
         # Added -user_agent and -headers for referer to bypass bot protection
         # We use a combined headers string for ffprobe
         headers = f"Referer: {REFERER}\r\n"
-        
+
         cmd = [
-            "ffprobe", 
+            "ffprobe",
             "-user_agent", USER_AGENT,
             "-headers", headers,
             "-v", "error",
@@ -33,10 +32,10 @@ def validate_stream(url, timeout=DEFAULT_TIMEOUT):
             "-of", "json",
             url
         ]
-        
+
         # Run ffprobe with a timeout
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        
+
         if result.returncode == 0:
             data = json.loads(result.stdout)
             if "streams" in data and len(data["streams"]) > 0:
@@ -53,7 +52,7 @@ def validate_stream(url, timeout=DEFAULT_TIMEOUT):
         else:
             err_msg = result.stderr.strip() or "Unknown ffprobe error"
             return {"status": "broken", "error": err_msg, "last_tested_at": datetime.now().isoformat()}
-            
+
     except subprocess.TimeoutExpired:
         return {"status": "broken", "error": f"Timeout after {timeout}s", "last_tested_at": datetime.now().isoformat()}
     except Exception as e:

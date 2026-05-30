@@ -1,0 +1,62 @@
+[
+  {
+    "input": "https://streaming.giraweb.com/8010/stream",
+    "expected": "https://streaming.giraweb.com/8010/stream"
+  },
+  {
+    "input": "https://stream.example.com/live.mp3?token=abc123",
+    "expected": "https://stream.example.com/live.mp3"
+  },
+  {
+    "input": "https://stream.example.com/live?bitrate=128&token=xyz",
+    "expected": "https://stream.example.com/live?bitrate=128"
+  },
+  {
+    "input": "https://stream.example.com/live/",
+    "expected": "https://stream.example.com/live"
+  },
+  {
+    "input": "https://stream.example.com/live#section",
+    "expected": "https://stream.example.com/live"
+  },
+  {
+    "input": "https://stream.example.com/play?b=2&a=1",
+    "expected": "https://stream.example.com/play?a=1&b=2"
+  },
+  {
+    "input": "",
+    "expected": ""
+  },
+  {
+    "input": "not a url",
+    "expected": "not a url"
+  },
+  {
+    "input": "http://x.com/p?session=1&keep=yes&sid=9",
+    "expected": "http://x.com/p?keep=yes"
+  },
+  {
+    "input": "https://x.com:8000/stream?a=hello world",
+    "expected": "https://x.com:8000/stream?a=hello+world"
+  },
+  {
+    "input": "HTTP://X.com/Path?Token=1",
+    "expected": "http://X.com/Path"
+  },
+  {
+    "input": "https://x.com//",
+    "expected": "https://x.com"
+  },
+  {
+    "input": "//cdn.example.com/logo",
+    "expected": "//cdn.example.com/logo"
+  },
+  {
+    "input": "https://x.com/s?expires=99999&uuid=zzz&genre=jazz&player=html5",
+    "expected": "https://x.com/s?genre=jazz"
+  },
+  {
+    "input": "https://x.com/s?q=a%26b&token=1",
+    "expected": "https://x.com/s?q=a%26b"
+  }
+]

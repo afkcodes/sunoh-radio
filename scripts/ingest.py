@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
-import os
-import json
-import glob
-import subprocess
-import concurrent.futures
 import argparse
-from datetime import datetime, timezone
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+import concurrent.futures
+import glob
+import json
+import os
+import subprocess
+import sys
+from datetime import UTC, datetime
 
-# Configuration
-MAX_WORKERS = int(os.environ.get("MAX_WORKERS", 5))
-PROBE_TIMEOUT = int(os.environ.get("PROBE_TIMEOUT", 15))
-OUTPUT_DIR = "metadata"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-REFERER = "https://onlineradiobox.com/"
+# Make sibling modules importable regardless of the working directory.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config  # noqa: E402
+from lib.normalize_url import normalize_url  # noqa: E402
+
+# Configuration (centralized in scripts/config.py)
+MAX_WORKERS = config.MAX_WORKERS
+PROBE_TIMEOUT = config.PROBE_TIMEOUT
+OUTPUT_DIR = config.METADATA_DIR
+USER_AGENT = config.USER_AGENT
+REFERER = config.REFERER
 
 def to_list(val):
     if not val: return []
@@ -21,29 +26,6 @@ def to_list(val):
     if isinstance(val, (set, tuple)): return list(val)
     if isinstance(val, str): return [val]
     return []
-
-def normalize_url(url):
-    """Normalize stream URL by removing session-specific query parameters."""
-    if not url: return ""
-    url = url.strip()
-    try:
-        u = urlparse(url)
-        params = parse_qsl(u.query)
-        # List of parameters to strip (tokens, session IDs, tracking, expires, etc)
-        strip_params = {
-            'token', 'session_id', 'sid', 'uid', 'uuid', 'auth', 'expires', 
-            'timestamp', 'time', 'key', 'hash', 'signature', 'sign', 
-            'tracker', 'client_id', 'user_id', 'h', 't', 'session', 'player'
-        }
-        filtered_params = [(k, v) for k, v in params if k.lower() not in strip_params]
-        
-        # Sort params for consistency
-        filtered_params.sort()
-        
-        new_query = urlencode(filtered_params)
-        return urlunparse(u._replace(query=new_query, fragment="")).rstrip('/')
-    except Exception:
-        return url
 
 def validate_stream(station):
     """Use ffprobe to verify a stream and get technical metadata."""
@@ -55,7 +37,7 @@ def validate_stream(station):
         # Added -user_agent to bypass simple bot protection/403s
         headers = f"Referer: {REFERER}\r\n"
         cmd = [
-            "ffprobe", 
+            "ffprobe",
             "-user_agent", USER_AGENT,
             "-headers", headers,
             "-v", "error",
@@ -64,9 +46,9 @@ def validate_stream(station):
             "-of", "json",
             url
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=PROBE_TIMEOUT)
-        
+
         if result.returncode == 0:
             data = json.loads(result.stdout)
             if "streams" in data and len(data["streams"]) > 0:
@@ -85,11 +67,11 @@ def validate_stream(station):
                 station["status"] = "broken"
         else:
             station["status"] = "broken"
-            
+
     except Exception:
         station["status"] = "broken"
-    
-    station["last_tested_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    station["last_tested_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     return station
 
 def ingest_provider(provider_name, target_country=None, force_test=False, skip_test=False, target_iso=None):
@@ -98,19 +80,19 @@ def ingest_provider(provider_name, target_country=None, force_test=False, skip_t
     provider_data_dir = os.path.join(scrapers_root, "providers", provider_name, "data")
     iso_map_path = os.path.join(scrapers_root, "core", "countries_iso_map.json")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    
+
     if target_country:
         output_file = os.path.join(OUTPUT_DIR, f"validated_{provider_name}_{target_country.replace(' ', '_')}.json")
     else:
         output_file = os.path.join(OUTPUT_DIR, f"validated_{provider_name}.json")
-    
+
     # Load Cache (Specific file first, then fallback to global provider file)
     cache = {}
     cache_sources = [output_file, os.path.join(OUTPUT_DIR, f"validated_{provider_name}.json")]
     for source in cache_sources:
         if os.path.exists(source):
             try:
-                with open(source, 'r', encoding='utf-8') as f:
+                with open(source, encoding='utf-8') as f:
                     cached_data = json.load(f)
                     for s in cached_data:
                         url = s.get("normalized_url") or s.get("stream_url")
@@ -123,7 +105,7 @@ def ingest_provider(provider_name, target_country=None, force_test=False, skip_t
     iso_map = {}
     if os.path.exists(iso_map_path):
         try:
-            with open(iso_map_path, 'r', encoding='utf-8') as f:
+            with open(iso_map_path, encoding='utf-8') as f:
                 iso_map = json.load(f)
         except Exception: pass
 
@@ -152,16 +134,16 @@ def ingest_provider(provider_name, target_country=None, force_test=False, skip_t
         try:
             # Filename is the ISO code (e.g. AD.json)
             file_iso = os.path.basename(file_path).replace(".json", "").upper()
-            
-            with open(file_path, 'r', encoding='utf-8') as f:
+
+            with open(file_path, encoding='utf-8') as f:
                 stations = json.load(f)
                 for station in stations:
                     url = (station.get("stream_url") or station.get("verified_url") or "").strip()
                     if not url: continue
-                    
+
                     # Normalize URL for deduplication
                     normalized_url = normalize_url(url)
-                    
+
                     st_country = station.get("country")
                     # Use filename ISO as primary, fallback to looking up the name in the record
                     iso_code = file_iso if file_iso else iso_map.get(st_country, st_country)
@@ -188,10 +170,10 @@ def ingest_provider(provider_name, target_country=None, force_test=False, skip_t
                             "codec": "unknown",
                         }
 
-                        # Apply cache if working and not forced
-                        if not force_test and existing and existing.get("status") == "working":
+                        # Apply cache if already tested and not forced
+                        if not force_test and existing and existing.get("status") in ["working", "broken"]:
                             entry.update({
-                                "status": "working",
+                                "status": existing["status"],
                                 "codec": existing.get("codec", "unknown"),
                                 "bitrate": existing.get("bitrate"),
                                 "sample_rate": existing.get("sample_rate"),
@@ -222,31 +204,51 @@ def ingest_provider(provider_name, target_country=None, force_test=False, skip_t
         stations_to_process.append(data)
 
     print(f"--- Found {len(stations_to_process)} unique stations ({cached_count} from cache) ---")
-    
+
     # Validation Phase
     to_test = [s for s in stations_to_process if s["status"] == "untested"]
     if skip_test:
         print("--- Skipping validation phase as requested ---")
     elif to_test:
         print(f"--- Validating {len(to_test)} new/untested streams (Parallel {MAX_WORKERS}) ---")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            future_to_station = {executor.submit(validate_stream, s): s for s in to_test}
-            count = 0
-            for future in concurrent.futures.as_completed(future_to_station):
-                count += 1
-                if count % 100 == 0:
-                    print(f"Progress: {count}/{len(to_test)} tested...")
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                future_to_station = {executor.submit(validate_stream, s): s for s in to_test}
+                count = 0
+                for future in concurrent.futures.as_completed(future_to_station):
+                    count += 1
+                    if count % 100 == 0:
+                        print(f"Progress: {count}/{len(to_test)} tested...")
+                        # Save intermediate progress securely
+                        temp_file = output_file + ".tmp"
+                        try:
+                            with open(temp_file, 'w', encoding='utf-8') as f:
+                                json.dump(stations_to_process, f, indent=2, ensure_ascii=False)
+                            os.replace(temp_file, output_file)
+                        except Exception as e:
+                            print(f"Failed to save intermediate progress: {e}")
+        except KeyboardInterrupt:
+            print("\nValidation interrupted! Saving progress...")
+            # We explicitly exit so we don't proceed to sync if interrupted
+            pass
+        except Exception as e:
+            print(f"\nValidation error: {str(e)}. Saving progress...")
     else:
         print("--- All stations already validated in cache. Skipping test phase. ---")
-        
+
     # Stats
     working = sum(1 for s in stations_to_process if s["status"] == "working")
     broken = sum(1 for s in stations_to_process if s["status"] == "broken")
     untested = sum(1 for s in stations_to_process if s["status"] == "untested")
 
     # Save
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(stations_to_process, f, indent=2, ensure_ascii=False)
+    temp_file = output_file + ".tmp"
+    try:
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(stations_to_process, f, indent=2, ensure_ascii=False)
+        os.replace(temp_file, output_file)
+    except Exception as e:
+        print(f"Failed to save final file: {e}")
 
     print("\n" + "="*50)
     print(f"INGESTION COMPLETE: {provider_name}")
@@ -264,6 +266,6 @@ if __name__ == "__main__":
     parser.add_argument('--iso', type=str, help='Filter to a specific country ISO code')
     parser.add_argument('-f', '--force-test', action='store_true', help='Re-validate even working streams')
     parser.add_argument('--skip-test', action='store_true', help='Skip validation entirely')
-    
+
     args = parser.parse_args()
     ingest_provider(args.provider, args.country, args.force_test, args.skip_test, args.iso)

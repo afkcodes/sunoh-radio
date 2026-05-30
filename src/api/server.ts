@@ -1,53 +1,35 @@
-import dotenv from 'dotenv';
-import Fastify from 'fastify';
-import { query } from '../db';
+import { buildApp } from './app';
+import { assertConfig, config } from '../config';
+import { closePool } from '../db';
 
-dotenv.config();
+async function start() {
+  assertConfig();
+  const app = await buildApp();
 
-const fastify = Fastify({ logger: true });
-
-// Basic health check
-fastify.get('/health', async () => {
-  return { status: 'ok', service: 'sunoh-radio-scraper-api' };
-});
-
-// Sample endpoint to get stations
-fastify.get('/stations', async (request, reply) => {
-  try {
-    const { country, genre } = request.query as { country?: string; genre?: string };
-
-    let sql = 'SELECT name, slug, image_url, stream_url, countries, genres FROM radio_stations WHERE status = $1';
-    const params: any[] = ['working'];
-
-    if (country) {
-      params.push(country);
-      sql += ` AND $${params.length} = ANY(countries)`;
+  // Graceful shutdown: stop accepting connections, then close the DB pool.
+  // Important under Docker `restart: always` / orchestrator SIGTERM.
+  const shutdown = async (signal: string) => {
+    app.log.info(`Received ${signal}, shutting down...`);
+    try {
+      await app.close();
+      await closePool();
+      process.exit(0);
+    } catch (err) {
+      app.log.error(err, 'error during shutdown');
+      process.exit(1);
     }
-
-    if (genre) {
-      params.push(genre);
-      sql += ` AND $${params.length} = ANY(genres)`;
-    }
-
-    sql += ' ORDER BY name LIMIT 50';
-
-    const res = await query(sql, params);
-    return res.rows;
-  } catch (err) {
-    fastify.log.error(err);
-    return reply.status(500).send({ error: 'Database error' });
+  };
+  for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+    process.on(signal, () => void shutdown(signal));
   }
-});
 
-const start = async () => {
   try {
-    const port = parseInt(process.env.PORT || '3000');
-    await fastify.listen({ port, host: '0.0.0.0' });
-    console.log(`API Server listening on port ${port}`);
+    await app.listen({ port: config.api.port, host: config.api.host });
   } catch (err) {
-    fastify.log.error(err);
+    app.log.error(err, 'failed to start server');
+    await closePool();
     process.exit(1);
   }
-};
+}
 
-start();
+void start();
