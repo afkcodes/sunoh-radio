@@ -68,6 +68,15 @@ $DC version >/dev/null 2>&1 || die "docker compose is not available"
   warn "No Cloudinary creds in .env — the API runs fine, but 'npm run host-images' won't."
 ok "docker, compose, and .env look good"
 
+# The api service joins the external 'sunoh-net' (so the sunoh-api stack can
+# reach it). It's declared external, so compose won't create it — make sure it
+# exists (idempotent; harmless if another stack already created it).
+if docker network inspect sunoh-net >/dev/null 2>&1; then
+  ok "shared network 'sunoh-net' present"
+else
+  docker network create sunoh-net >/dev/null && ok "created shared network 'sunoh-net'"
+fi
+
 # ----------------------------------------------------------------------------
 log "2/5 Starting Postgres"
 dc up -d db
