@@ -25,6 +25,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Default (internal) network only — the db must not be reachable
+    # from the shared external network where the sunoh-api stack
+    # lives. Only the api below bridges between the two.
+    networks:
+      - default
 
   api:
     build:
@@ -46,6 +51,24 @@ services:
     ports:
       # localhost only — front with a reverse proxy when you go public.
       - '127.0.0.1:4000:4000'
+    # Joins both the internal default (for db access) AND the external
+    # shared network (so the sunoh-api stack can reach this container
+    # by its `container_name` over Docker's built-in DNS).
+    networks:
+      - default
+      - sunoh-shared
 
 volumes:
   postgres_data:
+
+# `default` is the implicit per-stack network (db ↔ api). `sunoh-shared`
+# is the cross-stack network created once on the host with:
+#   docker network create sunoh-net
+# The sunoh-api stack joins the same external network in ITS own
+# docker-compose.yml, then resolves this api container as
+# `sunoh-radio-api:4000`.
+networks:
+  default:
+  sunoh-shared:
+    name: sunoh-net
+    external: true
