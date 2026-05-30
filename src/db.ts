@@ -1,16 +1,24 @@
-import dotenv from 'dotenv';
 import { Pool } from 'pg';
-
-dotenv.config();
+import { config } from './config';
 
 const pool = new Pool({
-  user: process.env.DB_USER || 'sunoh',
-  host: process.env.DB_HOST || 'localhost',
-  database: process.env.DB_NAME || 'sunoh_db',
-  password: process.env.DB_PASSWORD || 'sunoh_pass',
-  port: parseInt(process.env.DB_PORT || '5432'),
+  user: config.db.user,
+  host: config.db.host,
+  database: config.db.database,
+  password: config.db.password,
+  port: config.db.port,
+  max: config.db.max,
+  idleTimeoutMillis: config.db.idleTimeoutMillis,
+  connectionTimeoutMillis: config.db.connectionTimeoutMillis,
 });
 
-export const query = (text: string, params?: any[]) => pool.query(text, params);
+// Surface unexpected idle-client errors instead of crashing silently.
+pool.on('error', (err) => {
+  console.error('Unexpected PostgreSQL pool error:', err);
+});
+
+export const query = (text: string, params?: unknown[]) => pool.query(text, params);
+
+export const closePool = () => pool.end();
 
 export default pool;

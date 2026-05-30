@@ -13,14 +13,16 @@ __pycache__/
 .venv/
 env/
 venv/
+.pytest_cache/
+.ruff_cache/
 .env
 .env.*
+!.env.example
 
 # Project Specific
-metadata/ingestion_progress.json
-metadata/validated_*.json
-# We keep raw provider data usually, but ignore validated cache for cleaner repo?
-# metadata/
+# metadata/ is generated pipeline output (validated caches, progress, dedup
+# reports) — none of it belongs in the repo.
+metadata/*.json
 
 # OS/IDE
 .DS_Store
@@ -32,3 +34,4 @@ metadata/validated_*.json
 # Logs
 logs/
 *.log
+nohup.out

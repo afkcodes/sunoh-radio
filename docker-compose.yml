@@ -1,3 +1,9 @@
+# Pin the Compose project name so volumes/containers always resolve to the
+# original `sunoh-radio-scrapers_*` names regardless of the directory name.
+# Without this, running from a folder named `sunoh-radio` would create a NEW
+# empty postgres volume instead of mounting the existing data.
+name: sunoh-radio-scrapers
+
 services:
   db:
     image: postgres:17-alpine
@@ -5,14 +11,14 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER:-sunoh}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-sunoh_pass}
-      POSTGRES_DB: ${DB_NAME:-sunoh_db}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me}
+      POSTGRES_DB: ${DB_NAME:-sunoh_radio_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "${DB_PORT:-5433}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sunoh} -d ${DB_NAME:-sunoh_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sunoh} -d ${DB_NAME:-sunoh_radio_db}"]
       interval: 10s
       timeout: 5s
       retries: 5

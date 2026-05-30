@@ -1,4 +1,5 @@
 import json
+import os
 
 # Comprehensive ISO 3166-1 alpha-2 list (249 official + common territories)
 raw_iso_data = [
@@ -293,11 +294,14 @@ aliases = {
 # Merge aliases into the lookup dict
 iso_dict.update(aliases)
 
-output_dir = "src/radio/scrapers/metadata/"
-with open(output_dir + 'countries_full.json', 'w', encoding='utf-8') as f:
+scrapers_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+output_dir = os.path.join(scrapers_root, "core")
+os.makedirs(output_dir, exist_ok=True)
+
+with open(os.path.join(output_dir, 'countries_full.json'), 'w', encoding='utf-8') as f:
     json.dump(raw_iso_data, f, indent=2, ensure_ascii=False)
 
-with open(output_dir + 'countries_iso_map.json', 'w', encoding='utf-8') as f:
+with open(os.path.join(output_dir, 'countries_iso_map.json'), 'w', encoding='utf-8') as f:
     json.dump(iso_dict, f, indent=2, ensure_ascii=False)
 
 print(f"Generated countries_full.json with {len(raw_iso_data)} official entries.")

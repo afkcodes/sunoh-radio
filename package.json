@@ -6,26 +6,48 @@
   "author": "Ashish Kumar",
   "license": "MIT",
   "scripts": {
-    "init-db": "tsx src/initDb.ts",
+    "migrate": "tsx src/migrate.ts",
+    "init-db": "tsx src/migrate.ts",
     "sync": "tsx src/sync_to_db.ts",
+    "stats": "tsx src/stats.ts",
     "ingest": "python3 scripts/ingest.py",
     "validate": "python3 scripts/validate_all.py",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:worker": "docker compose run --rm scraper"
+    "docker:worker": "docker compose run --rm scraper",
+    "host-images": "tsx src/host_images.ts",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/caching": "^9.0.3",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "axios": "^1.13.5",
+    "cloudinary": "^2.10.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.7.4",
+    "fastify-plugin": "^5.1.0",
     "pg": "^8.18.0",
     "puppeteer": "^24.37.5",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-adblocker": "^2.13.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "~25",
     "@types/pg": "^8.16.0",
+    "eslint": "^10.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
     "tsx": "^4.21.0",
-    "typescript": "~5.9"
+    "typescript": "~5.9",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.7"
   }
 }

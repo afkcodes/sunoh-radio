@@ -1,35 +1,27 @@
 #!/usr/bin/env python3
-import os
-import json
-import subprocess
-import time
 import argparse
+import json
+import os
+import subprocess
 import sys
+import time
 from datetime import datetime
 
-# Configuration
-os.environ["PATH"] = f"/home/ashish/n/bin:{os.environ.get('PATH', '')}"
-SCRAPER_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Ensure this script's directory is importable so `config` resolves regardless
+# of the current working directory.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import config  # noqa: E402
 
-# Load .env file manually to avoid dependency issues on host
-env_path = os.path.join(SCRAPER_ROOT, ".env")
-if os.path.exists(env_path):
-    with open(env_path, "r") as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                try:
-                    key, value = line.split("=", 1)
-                    os.environ[key.strip()] = value.strip()
-                except ValueError:
-                    continue
+# Configuration (centralized in scripts/config.py)
+SCRAPER_ROOT = config.PROJECT_ROOT
+if config.NODE_BIN_PATH:
+    os.environ["PATH"] = f"{config.NODE_BIN_PATH}:{os.environ.get('PATH', '')}"
 
-METADATA_DIR = os.path.join(SCRAPER_ROOT, "metadata")
-CORE_DIR = os.path.join(SCRAPER_ROOT, "core")
-LOGS_DIR = os.path.join(SCRAPER_ROOT, "logs")
+METADATA_DIR = config.METADATA_DIR
+CORE_DIR = config.CORE_DIR
+LOGS_DIR = config.LOGS_DIR
 STATE_FILE = os.path.join(METADATA_DIR, "ingestion_progress.json")
-COUNTRIES_FILE = os.path.join(CORE_DIR, "countries.txt")
-ISO_MAP_FILE = os.path.join(CORE_DIR, "countries_iso_map.json")
+COUNTRIES_FILE = config.COUNTRIES_FILE
 LOG_FILE = os.path.join(LOGS_DIR, "ingestion.log")
 
 # Ensure directories exist
@@ -47,7 +39,7 @@ def log(msg, color=RESET, log_to_file=True):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     formatted_msg = f"[{timestamp}] {msg}"
     print(f"{color}{formatted_msg}{RESET}")
-    
+
     if log_to_file:
         with open(LOG_FILE, "a") as f:
             f.write(formatted_msg + "\n")
@@ -77,27 +69,30 @@ def vpn_connect(iso_code):
     """Connect to Proton VPN for a specific country code."""
     # Handle Proton-specific ISO overrides
     proton_iso = PROTON_MAP.get(iso_code.lower(), iso_code.lower())
-    
+
     log(f"Attempting to connect to Proton VPN: {proton_iso} (Source: {iso_code})", CYAN)
-    
+
     # Try connecting to the specific country
     stdout, stderr, code = run_command(f"protonvpn connect --country {proton_iso}")
-    
+
     if code != 0:
         log(f"Failed to connect to {iso_code}. Falling back to US...", YELLOW)
         stdout, stderr, code = run_command("protonvpn connect --country us")
         if code != 0:
             log(f"CRITICAL: Failed to connect to VPN even with US fallback. {stderr}", RED)
             return False
-    
-    log(f"Successfully connected to VPN ({iso_code if code == 0 else 'US fallback'})", GREEN)
+
+        log("Successfully connected to VPN (US fallback)", GREEN)
+    else:
+        log(f"Successfully connected to VPN ({iso_code})", GREEN)
+
     time.sleep(5) # Wait for network to stabilize
     return True
 
 def get_processed_countries():
     if os.path.exists(STATE_FILE):
         try:
-            with open(STATE_FILE, 'r') as f:
+            with open(STATE_FILE) as f:
                 return json.load(f)
         except:
             return {}
@@ -116,9 +111,9 @@ def main():
     parser = argparse.ArgumentParser(description="Orchestrate radio ingestion with automatic Proton VPN switching.")
     parser.add_argument("--provider", required=True, help="Radio provider name (e.g., onlineradiobox)")
     parser.add_argument("--force", action="store_true", help="Reprocess already processed countries")
-    parser.add_argument("--disconnect-after", action="store_true", default=True, help="Disconnect VPN after each country (safer for SSH)")
+    parser.add_argument("--disconnect-after", action=argparse.BooleanOptionalAction, default=True, help="Disconnect VPN after each country (safer for SSH)")
     parser.add_argument("--skip-vpn", action="store_true", help="Skip VPN management (useful if using a manual wg-quick tunnel)")
-    
+
     args = parser.parse_args()
     provider = args.provider
 
@@ -126,16 +121,10 @@ def main():
         log(f"Countries file not found: {COUNTRIES_FILE}", RED)
         sys.exit(1)
 
-    # Load ISO Map
-    iso_map = {}
-    if os.path.exists(ISO_MAP_FILE):
-        with open(ISO_MAP_FILE, 'r') as f:
-            iso_map = json.load(f)
-
     processed = get_processed_countries()
-    
+
     # Read countries.txt (format iso:Name)
-    with open(COUNTRIES_FILE, 'r') as f:
+    with open(COUNTRIES_FILE) as f:
         lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
     log(f"Starting orchestration for {len(lines)} countries...", GREEN)
@@ -181,12 +170,12 @@ def main():
 
                 if code == 0:
                     log(f"Successfully ingested {country_name}", GREEN)
-                    
+
                     # 3. Sync to DB
                     log(f"Syncing {country_name} to database...", CYAN)
                     sync_cmd = f"npx tsx {SCRAPER_ROOT}/src/sync_to_db.ts {provider} \"{country_name}\""
                     s_stdout, s_stderr, s_code = run_command(sync_cmd)
-                    
+
                     if s_code == 0:
                         log(f"Successfully synced {country_name} to DB", GREEN)
                         save_progress(country_name, "success")
