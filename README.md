@@ -55,7 +55,7 @@ responses are JSON and send `Cache-Control` headers so a CDN can absorb read tra
 | :--- | :--- |
 | `GET /health` | Liveness probe. |
 | `GET /ready` | Readiness probe (checks the database). |
-| `GET /stations` | Paginated list. Query: `country`, `genre`, `language`, `status` (default `working`), `q` (name search), `limit` (≤100), `offset`. Returns `{ data, pagination }`. |
+| `GET /stations` | Paginated list. Query: `country`, `genre`, `language`, `status` (default `working`), `q` (search), `limit` (≤100), `offset`. Returns `{ data, pagination }`. `q` matches the **name or any genre tag** and is **relevance-ranked** (closest name matches first via `pg_trgm`). |
 | `GET /stations/:slug` | Single station by slug (404 if missing). |
 
 Each station includes a resolved `image` field (`COALESCE(image_hosted, image_url)`) — use it

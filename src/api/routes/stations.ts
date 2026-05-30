@@ -43,9 +43,15 @@ export default async function stationRoutes(app: FastifyInstance) {
       params.push(language);
       where.push(`$${params.length} = ANY(languages)`);
     }
+    // Free-text search: match the name OR any genre tag (case-insensitive,
+    // trigram-accelerated for name). `likeIdx` is reused in ORDER BY below.
+    let likeIdx = 0;
     if (q) {
       params.push(`%${q}%`);
-      where.push(`name ILIKE $${params.length}`); // uses the trigram GIN index
+      likeIdx = params.length;
+      where.push(
+        `(name ILIKE $${likeIdx} OR EXISTS (SELECT 1 FROM unnest(genres) g WHERE g ILIKE $${likeIdx}))`,
+      );
     }
 
     const whereSql = where.join(' AND ');
@@ -56,6 +62,15 @@ export default async function stationRoutes(app: FastifyInstance) {
     );
     const total = totalRes.rows[0].total as number;
 
+    // Relevance ranking when searching: exact name hits first, then by trigram
+    // similarity to the name, then alphabetically. Plain alphabetical otherwise.
+    let orderBy = 'ORDER BY name ASC, id ASC';
+    if (q) {
+      params.push(q);
+      const rawIdx = params.length; // raw term for similarity()
+      orderBy = `ORDER BY (name ILIKE $${likeIdx}) DESC, similarity(name, $${rawIdx}) DESC, name ASC, id ASC`;
+    }
+
     params.push(limit);
     const limitIdx = params.length;
     params.push(offset);
@@ -65,7 +80,7 @@ export default async function stationRoutes(app: FastifyInstance) {
       `SELECT ${STATION_COLUMNS}
          FROM radio_stations
         WHERE ${whereSql}
-        ORDER BY name ASC, id ASC
+        ${orderBy}
         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params,
     );

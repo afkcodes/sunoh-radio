@@ -64,6 +64,19 @@ describe.skipIf(!RUN)('API (integration)', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('search `q` matches genre tags, not just the name', async () => {
+    // "Dead Station" has genre 'talk' but no "talk" in its name.
+    const res = await app.inject({ method: 'GET', url: '/stations?q=talk&status=broken' });
+    expect(res.statusCode).toBe(200);
+    const names = res.json().data.map((s: { name: string }) => s.name);
+    expect(names).toContain('Dead Station');
+  });
+
+  it('search `q` matches by name too', async () => {
+    const res = await app.inject({ method: 'GET', url: '/stations?q=jazz' });
+    expect(res.json().data.map((s: { name: string }) => s.name)).toContain('Jazz FM');
+  });
+
   it('resolves `image` to image_hosted when present', async () => {
     const res = await app.inject({ method: 'GET', url: '/stations?country=GB' });
     const jazz = res.json().data[0];
