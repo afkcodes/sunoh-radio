@@ -50,7 +50,7 @@ services:
         condition: service_healthy
     env_file: .env
     ports:
-      - "3000:3000"
+      - "4000:4000"
     command: ["node", "dist/index.js"] # Adjust once API is built
 
 volumes:

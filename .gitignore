@@ -35,3 +35,7 @@ metadata/*.json
 logs/
 *.log
 nohup.out
+
+# Deploy artifacts
+backups/
+*.dump

@@ -40,7 +40,7 @@ export const config = {
   },
 
   api: {
-    port: int(process.env.PORT, 3000),
+    port: int(process.env.PORT, 4000),
     host: process.env.HOST || '0.0.0.0',
     logLevel: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
     // CORS allow-list. Default '*' in dev; require an explicit list in prod.
