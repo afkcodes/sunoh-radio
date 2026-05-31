@@ -10,5 +10,7 @@ export default fp(async (app) => {
   await app.register(rateLimit, {
     max: config.api.rateLimit.max,
     timeWindow: config.api.rateLimit.timeWindow,
+    // The admin UI is authenticated + same-origin; don't rate-limit it.
+    allowList: (req) => req.url.startsWith('/admin'),
   });
 });

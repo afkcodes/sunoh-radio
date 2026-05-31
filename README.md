@@ -165,6 +165,30 @@ Validation failures return `400` with Fastify's error shape:
 > Postgres with PgBouncer; put a CDN in front of the API (the `Cache-Control`
 > headers make `/countries`, `/genres`, `/stats` essentially free at the edge).
 
+## 🛠️ Admin Console (`/admin`)
+A modern React SPA for full CRUD on stations, served by the API at **`/admin`**
+(single admin password — set `ADMIN_PASSWORD` + `SESSION_SECRET`). Features:
+
+- **Dashboard** — totals, status split, image-hosting progress, top countries/genres.
+- **Stations** — search (name + genre), filters, pagination, multi-select **bulk
+  actions** (delete / set status / verify), inline **stream preview** (via the
+  `audio_x` player), and a station editor.
+- **Image management** — upload/replace a logo (the old Cloudinary asset is
+  **deleted** and the new one uploaded), or remove it.
+- **Stream test** — on-demand HTTP reachability check that updates status.
+- **Audit log** — every mutation recorded. **CSV/JSON import + export**.
+
+```bash
+# dev: API on :4000 + Vite dev server (proxies /admin/api -> :4000)
+npm run dev
+npm run admin:dev          # http://localhost:5173/admin
+
+# prod: the SPA is built into the Docker image and served at /admin automatically
+npm run admin:build
+```
+Auth is a signed httpOnly-cookie session; the admin API lives under `/admin/api`
+and is rate-limit-exempt (same-origin). Endpoints write an `audit_log` row.
+
 ## 🗄️ Database Migrations
 Schema lives in `migrations/*.sql` and is applied by a small forward-only runner:
 ```bash

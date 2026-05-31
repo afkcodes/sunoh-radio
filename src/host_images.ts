@@ -1,25 +1,14 @@
 import axios from 'axios';
-import { v2 as cloudinary, type UploadApiOptions } from 'cloudinary';
 import { closePool, query } from './db';
 import { config } from './config';
-
-// Configure the Cloudinary SDK. Prefer discrete values; otherwise fall back to
-// the CLOUDINARY_URL env var, which the SDK reads automatically.
-if (config.cloudinary.cloudName && config.cloudinary.apiKey && config.cloudinary.apiSecret) {
-  cloudinary.config({
-    cloud_name: config.cloudinary.cloudName,
-    api_key: config.cloudinary.apiKey,
-    api_secret: config.cloudinary.apiSecret,
-    secure: true,
-  });
-} else if (config.cloudinary.url) {
-  cloudinary.config({ secure: true }); // picks up CLOUDINARY_URL
-}
+import { hasCloudinaryCreds, publicIdForSlug, uploadImage } from './lib/cloudinary';
 
 const { batchSize: BATCH_SIZE, maxAttempts: MAX_ATTEMPTS, limit: LIMIT, workingOnly: WORKING_ONLY } =
   config.images;
 
-type UploadResult = { ok: true; url: string } | { ok: false; permanent: boolean };
+type UploadResult =
+  | { ok: true; url: string; publicId: string }
+  | { ok: false; permanent: boolean };
 
 /**
  * Download a source logo and mirror it to Cloudinary as-is (NO transformation,
@@ -27,7 +16,7 @@ type UploadResult = { ok: true; url: string } | { ok: false; permanent: boolean 
  * Distinguishes permanent failures (dead image, e.g. 404/410) from transient
  * ones (timeouts, 5xx, network) so the caller can decide whether to retry.
  */
-async function uploadToCloudinary(url: string, publicId: string): Promise<UploadResult> {
+async function uploadToCloudinary(url: string, slug: string): Promise<UploadResult> {
   try {
     const response = await axios.get<ArrayBuffer>(url, {
       responseType: 'arraybuffer',
@@ -36,35 +25,16 @@ async function uploadToCloudinary(url: string, publicId: string): Promise<Upload
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SunohRadioBot/1.0)' },
     });
     const buffer = Buffer.from(response.data);
-
-    const options: UploadApiOptions = {
-      public_id: publicId,
-      folder: config.cloudinary.folder,
-      overwrite: false, // idempotent: don't re-upload if it already exists
-      resource_type: 'image',
-      // Deliberately no eager/incoming transformations -> 0 transformation credits.
-    };
-
-    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream(options, (error, res) => {
-          if (error || !res) return reject(error ?? new Error('No upload response'));
-          resolve(res as { secure_url: string });
-        })
-        .end(buffer);
-    });
-
-    return { ok: true, url: result.secure_url };
+    const { url: hostedUrl, publicId } = await uploadImage(buffer, publicIdForSlug(slug));
+    return { ok: true, url: hostedUrl, publicId };
   } catch (error) {
     const status = axios.isAxiosError(error) ? error.response?.status : undefined;
     if (status) {
       console.error(`Failed to download ${url}: HTTP ${status}`);
     } else {
-      // Cloudinary rejects with a plain object ({ message, http_code }), not an
-      // Error — dig out a readable message instead of logging "[object Object]".
       const e = error as { message?: string; error?: { message?: string } };
       const message = e?.message ?? e?.error?.message ?? JSON.stringify(error);
-      console.error(`Error hosting ${publicId}: ${message}`);
+      console.error(`Error hosting ${slug}: ${message}`);
     }
     // 4xx (except 408/429) means the source is genuinely gone — don't retry.
     const permanent =
@@ -74,10 +44,7 @@ async function uploadToCloudinary(url: string, publicId: string): Promise<Upload
 }
 
 async function hostImages() {
-  const hasCreds =
-    (config.cloudinary.cloudName && config.cloudinary.apiKey && config.cloudinary.apiSecret) ||
-    config.cloudinary.url;
-  if (!hasCreds) {
+  if (!hasCloudinaryCreds()) {
     console.error(
       'Missing Cloudinary credentials. Set CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / ' +
         'CLOUDINARY_API_SECRET (or CLOUDINARY_URL) in your environment.',
@@ -128,19 +95,19 @@ async function hostImages() {
 
     const results = await Promise.all(
       res.rows.map(async (station) => {
-        // Use slug as the Cloudinary public_id (deterministic, no extension).
-        const publicId = String(station.slug || station.id);
-        const result = await uploadToCloudinary(station.image_url, publicId);
+        const slug = String(station.slug || station.id);
+        const result = await uploadToCloudinary(station.image_url, slug);
 
         if (result.ok) {
           await query(
             `UPDATE radio_stations
                 SET image_hosted = $1,
+                    image_public_id = $2,
                     image_status = 'hosted',
                     last_image_attempt_at = now(),
                     updated_at = CURRENT_TIMESTAMP
-              WHERE id = $2`,
-            [result.url, station.id],
+              WHERE id = $3`,
+            [result.url, result.publicId, station.id],
           );
           return true;
         }

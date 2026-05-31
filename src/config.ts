@@ -57,6 +57,17 @@ export const config = {
     aggregateCacheTtl: int(process.env.AGGREGATE_CACHE_TTL, 600),
   },
 
+  admin: {
+    // Single-admin auth. Login compares against this; a signed JWT is issued
+    // into an httpOnly cookie. REQUIRED in production (see assertConfig).
+    password: process.env.ADMIN_PASSWORD || '',
+    // Secret used to sign the session JWT/cookie.
+    sessionSecret: process.env.SESSION_SECRET || 'dev-insecure-session-secret-change-me',
+    // Session lifetime.
+    sessionTtl: process.env.SESSION_TTL || '7d',
+    cookieName: 'sunoh_admin',
+  },
+
   cloudinary: {
     // Either provide the three discrete values, or a single CLOUDINARY_URL
     // (cloudinary://<key>:<secret>@<cloud_name>), which the SDK reads natively.
@@ -89,6 +100,8 @@ export function assertConfig(): void {
   const missing: string[] = [];
   if (!process.env.DB_PASSWORD) missing.push('DB_PASSWORD');
   if (!process.env.DB_HOST) missing.push('DB_HOST');
+  if (!process.env.ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD');
+  if (!process.env.SESSION_SECRET) missing.push('SESSION_SECRET');
   if (config.api.corsOrigins.includes('*')) {
     console.warn('[config] CORS_ORIGINS is "*" in production — consider an explicit allow-list.');
   }

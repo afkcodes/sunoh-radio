@@ -1,0 +1,16 @@
+**/node_modules
+dist
+admin/dist
+metadata
+backups
+*.dump
+logs
+nohup.out
+.git
+.env
+.env.*
+providers/*/data
+__pycache__
+.pytest_cache
+.ruff_cache
+*.log

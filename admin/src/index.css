@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  body {
+    @apply bg-ink-50 text-ink-800 antialiased dark:bg-ink-950 dark:text-ink-100;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  /* Subtle broadcast grid texture behind the app */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(120, 113, 100, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(120, 113, 100, 0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  *:focus-visible {
+    @apply outline-none ring-2 ring-signal-500/70 ring-offset-1 ring-offset-transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-ink-300/60 dark:bg-ink-700; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-ink-200/70 bg-white shadow-soft dark:border-ink-800 dark:bg-ink-900;
+  }
+  .input {
+    @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800
+           placeholder:text-ink-400 transition focus:border-signal-400
+           dark:border-ink-700 dark:bg-ink-850 dark:text-ink-100;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400;
+  }
+  .mono { @apply font-mono text-[0.8em] tracking-tight; }
+}
+
+/* Equalizer bars used on the "now playing" indicator */
+.eq span {
+  display: inline-block;
+  width: 2px;
+  height: 12px;
+  margin-right: 1px;
+  background: currentColor;
+  border-radius: 2px;
+  animation: equalize 0.9s ease-in-out infinite;
+}
+.eq span:nth-child(2) { animation-delay: 0.15s; }
+.eq span:nth-child(3) { animation-delay: 0.3s; }
+.eq span:nth-child(4) { animation-delay: 0.45s; }
+@keyframes equalize { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
