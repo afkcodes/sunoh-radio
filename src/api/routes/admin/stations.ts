@@ -10,7 +10,7 @@ const COLS = `
   id, slug, name, image_url, image_hosted, image_public_id, image_status,
   COALESCE(image_hosted, image_url) AS image,
   stream_url, normalized_url, providers, countries, genres, languages,
-  status, codec, bitrate, sample_rate, failure_count, is_verified,
+  status, codec, bitrate, sample_rate, failure_count, is_verified, play_count,
   last_tested_at, metadata, created_at, updated_at
 `;
 
@@ -20,6 +20,7 @@ const SORTABLE: Record<string, string> = {
   updated_at: 'updated_at',
   last_tested_at: 'last_tested_at',
   status: 'status',
+  play_count: 'play_count',
 };
 
 interface ListQuery {
@@ -46,6 +47,7 @@ const SCALAR_FIELDS = [
   'bitrate',
   'sample_rate',
   'is_verified',
+  'play_count',
 ] as const;
 
 export default async function adminStationRoutes(app: FastifyInstance) {

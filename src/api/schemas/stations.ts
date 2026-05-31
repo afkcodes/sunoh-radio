@@ -16,6 +16,7 @@ export const stationProperties = {
   codec: { type: ['string', 'null'] },
   bitrate: { type: ['integer', 'null'] },
   sample_rate: { type: ['integer', 'null'] },
+  play_count: { type: 'integer' },
 } as const;
 
 /** Querystring schema for GET /stations — Fastify coerces + validates (400 on bad input). */

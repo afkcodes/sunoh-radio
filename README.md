@@ -65,6 +65,7 @@ caching, and graceful shutdown. Tuning knobs are in `.env.example`.
 | `GET /stations` | Paginated, filterable, searchable list of stations. |
 | `GET /stations/recent` | Newest stations first. Query: `country`, `status` (default `working`), `days` (optional recency window), `limit` (≤100, default 20), `offset`. Same `{ data, pagination }` shape. |
 | `GET /stations/:slug` | A single station by its slug (`404` if missing). |
+| `POST /stations/:slug/play` | Increment the station's `play_count`; returns the new count. Call when a user starts playback (debounce client-side). |
 | `GET /countries` | Country facet counts (working stations), cached. |
 | `GET /genres` | Genre facet counts (working stations), cached. |
 | `GET /languages` | Language facet counts (working stations), cached. |

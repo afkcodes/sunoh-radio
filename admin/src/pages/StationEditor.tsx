@@ -20,6 +20,7 @@ interface Form {
   codec: string;
   bitrate: string;
   sample_rate: string;
+  play_count: string;
   is_verified: boolean;
 }
 
@@ -34,6 +35,7 @@ const empty: Form = {
   codec: '',
   bitrate: '',
   sample_rate: '',
+  play_count: '0',
   is_verified: false,
 };
 
@@ -49,6 +51,7 @@ function toForm(s: Station): Form {
     codec: s.codec || '',
     bitrate: s.bitrate ? String(s.bitrate) : '',
     sample_rate: s.sample_rate ? String(s.sample_rate) : '',
+    play_count: String(s.play_count ?? 0),
     is_verified: s.is_verified,
   };
 }
@@ -98,6 +101,7 @@ export default function StationEditor({
     codec: form.codec || null,
     bitrate: Number(form.bitrate) || 0,
     sample_rate: Number(form.sample_rate) || 0,
+    play_count: Number(form.play_count) || 0,
     is_verified: form.is_verified,
   });
 
@@ -202,6 +206,10 @@ export default function StationEditor({
               <Input value={form.bitrate} onChange={(e) => set('bitrate', e.target.value)} placeholder="128000" inputMode="numeric" />
             </Field>
           </div>
+
+          <Field label="Play count">
+            <Input value={form.play_count} onChange={(e) => set('play_count', e.target.value)} inputMode="numeric" />
+          </Field>
 
           <div className="card flex items-center justify-between p-4">
             <div>

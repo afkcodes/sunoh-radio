@@ -58,6 +58,16 @@ describe.skipIf(!RUN)('API (integration)', () => {
     expect(res.json().data[0].name).toBe('Jazz FM');
   });
 
+  it('POST /stations/:slug/play increments play_count', async () => {
+    const r1 = await app.inject({ method: 'POST', url: '/stations/jazz-fm-1953003626/play' });
+    expect(r1.statusCode).toBe(200);
+    expect(r1.json().play_count).toBe(1);
+    const r2 = await app.inject({ method: 'POST', url: '/stations/jazz-fm-1953003626/play' });
+    expect(r2.json().play_count).toBe(2);
+    const missing = await app.inject({ method: 'POST', url: '/stations/nope-0000000000/play' });
+    expect(missing.statusCode).toBe(404);
+  });
+
   it('GET /stations rejects limit over the cap (400)', async () => {
     const res = await app.inject({ method: 'GET', url: '/stations?limit=999' });
     expect(res.statusCode).toBe(400);

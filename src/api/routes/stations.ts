@@ -7,7 +7,7 @@ const STATION_COLUMNS = `
   image_url, image_hosted,
   COALESCE(image_hosted, image_url) AS image,  -- ready-to-use: prefer hosted, fall back to source
   stream_url,
-  countries, genres, languages, status, codec, bitrate, sample_rate
+  countries, genres, languages, status, codec, bitrate, sample_rate, play_count
 `;
 
 interface ListQuery {
@@ -129,6 +129,18 @@ export default async function stationRoutes(app: FastifyInstance) {
       return { data: rows, pagination: { limit, offset, total } };
     },
   );
+
+  // POST /stations/:slug/play — record a play (increment the counter). Public,
+  // lightweight; clients call this when a user starts a station. Returns the
+  // new count. Debounce on the client to avoid double-counting reconnects.
+  app.post<{ Params: { slug: string } }>('/stations/:slug/play', async (req, reply) => {
+    const res = await query(
+      'UPDATE radio_stations SET play_count = play_count + 1 WHERE slug = $1 RETURNING play_count',
+      [req.params.slug],
+    );
+    if (res.rows.length === 0) return reply.status(404).send({ error: 'Station not found' });
+    return { ok: true, play_count: res.rows[0].play_count as number };
+  });
 
   // GET /stations/:slug — single station.
   app.get<{ Params: { slug: string } }>(

@@ -19,6 +19,7 @@ export interface Station {
   sample_rate: number | null;
   failure_count: number;
   is_verified: boolean;
+  play_count: number;
   last_tested_at: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
