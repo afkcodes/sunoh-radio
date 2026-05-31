@@ -59,3 +59,19 @@ export const getStationSchema = {
     properties: { slug: { type: 'string', minLength: 1 } },
   },
 } as const;
+
+// GET /stations/recent — newest stations, optionally scoped to a country.
+export const recentStationsSchema = {
+  querystring: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      country: { type: 'string', minLength: 1 },
+      status: { type: 'string', enum: ['working', 'broken', 'untested'], default: 'working' },
+      days: { type: 'integer', minimum: 1, maximum: 365 }, // optional recency window
+      limit: { type: 'integer', minimum: 1, maximum: config.api.maxLimit, default: 20 },
+      offset: { type: 'integer', minimum: 0, maximum: config.api.maxOffset, default: 0 },
+    },
+  },
+  response: listStationsSchema.response,
+} as const;

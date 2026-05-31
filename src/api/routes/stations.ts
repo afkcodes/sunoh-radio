@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { query } from '../../db';
-import { getStationSchema, listStationsSchema } from '../schemas/stations';
+import { getStationSchema, listStationsSchema, recentStationsSchema } from '../schemas/stations';
 
 const STATION_COLUMNS = `
   id, slug, name,
@@ -87,6 +87,48 @@ export default async function stationRoutes(app: FastifyInstance) {
 
     return { data: rowsRes.rows, pagination: { limit, offset, total } };
   });
+
+  // GET /stations/recent — newest stations first, optionally scoped to a country
+  // (and an optional `days` recency window). Registered before /stations/:slug.
+  app.get<{ Querystring: { country?: string; status: string; days?: number; limit: number; offset: number } }>(
+    '/stations/recent',
+    { schema: recentStationsSchema },
+    async (req) => {
+      const { country, status, days, limit, offset } = req.query;
+      const where: string[] = [];
+      const params: unknown[] = [];
+
+      params.push(status);
+      where.push(`status = $${params.length}`);
+      if (country) {
+        params.push(country);
+        where.push(`$${params.length} = ANY(countries)`);
+      }
+      if (days) {
+        params.push(`${days} days`);
+        where.push(`created_at >= now() - $${params.length}::interval`);
+      }
+      const whereSql = where.join(' AND ');
+
+      const total = (
+        await query(`SELECT count(*)::int AS total FROM radio_stations WHERE ${whereSql}`, params)
+      ).rows[0].total as number;
+
+      params.push(limit, offset);
+      const rows = (
+        await query(
+          `SELECT ${STATION_COLUMNS}
+             FROM radio_stations
+            WHERE ${whereSql}
+            ORDER BY created_at DESC, id DESC
+            LIMIT $${params.length - 1} OFFSET $${params.length}`,
+          params,
+        )
+      ).rows;
+
+      return { data: rows, pagination: { limit, offset, total } };
+    },
+  );
 
   // GET /stations/:slug — single station.
   app.get<{ Params: { slug: string } }>(

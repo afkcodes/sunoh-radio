@@ -63,6 +63,7 @@ caching, and graceful shutdown. Tuning knobs are in `.env.example`.
 | `GET /health` | Liveness probe. |
 | `GET /ready` | Readiness probe (verifies the DB; `503` if unreachable). |
 | `GET /stations` | Paginated, filterable, searchable list of stations. |
+| `GET /stations/recent` | Newest stations first. Query: `country`, `status` (default `working`), `days` (optional recency window), `limit` (≤100, default 20), `offset`. Same `{ data, pagination }` shape. |
 | `GET /stations/:slug` | A single station by its slug (`404` if missing). |
 | `GET /countries` | Country facet counts (working stations), cached. |
 | `GET /genres` | Genre facet counts (working stations), cached. |

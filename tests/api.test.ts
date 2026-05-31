@@ -52,6 +52,12 @@ describe.skipIf(!RUN)('API (integration)', () => {
     expect(res.json().pagination.total).toBe(1);
   });
 
+  it('GET /stations/recent returns newest working stations (not shadowed by :slug)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/stations/recent?country=GB' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].name).toBe('Jazz FM');
+  });
+
   it('GET /stations rejects limit over the cap (400)', async () => {
     const res = await app.inject({ method: 'GET', url: '/stations?limit=999' });
     expect(res.statusCode).toBe(400);
